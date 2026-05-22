@@ -2,6 +2,19 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.5.1] — 2026-05-22
+
+A branding release — no behaviour changes. little-coder now wears the v1.0 brand book: the warm **paper / ink / honey** palette (`#F2EBDC` · `#1A1410` · `#E15A1F`), the `lc▌` block-cursor mark, and IBM Plex Mono. The "ready to type" cursor is the punchline — it ties the CLI heritage into the identity without saying so.
+
+### Changed
+- **README hero is now the brand-book terminal banner.** A single self-contained SVG (`assets/banner.svg`, recreating the brand book's "github readme · hero" slide) replaces the old startup screenshot: ink terminal card, `lc▌` monogram in honey, the wordmark + tagline, and the verifiable headline numbers (`qwen3.6-35b-a3b`, terminal-bench 2.0 24.6%, aider polyglot 45.56%). IBM Plex Mono is embedded so it renders in-face on GitHub, with a `ui-monospace` fallback.
+- **TUI header adopts the honey "prompt lockup."** The interactive startup header (`.pi/extensions/branding/index.ts`) now renders `> little-coder▌` with a honey prompt caret and block cursor — the brand's variant for terminals and dark surfaces. Honey is emitted as a 24-bit truecolor SGR so it matches `#E15A1F` exactly regardless of the active pi theme.
+
+### Removed
+- The stale purple (`#7c3aed`) `docs/assets/startup.svg` mockup (`v0.0.1` / `ollama/qwen3.5`), now superseded by the on-brand banner.
+
+---
+
 ## [v1.5.0] — 2026-05-22
 
 A reliability + UX release centered on the harness's intervention machinery. Issue [#8](https://github.com/itayinbarr/little-coder/issues/8) reproduced on 1.4.3 through a *new* mechanism, and chasing it down fixed a cluster of related symptoms: thinking never actually turning off after a budget breach, a spurious "empty response" nag after interrupts, and a noisy stack of warnings around every harness decision. Harness interventions now speak with one voice, and the thinking-budget cap is more generous.
