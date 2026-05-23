@@ -3,9 +3,9 @@ import { harnessIntervention } from "../_shared/intervention.ts";
 
 // Harness intervention: trim a `read` result that would overflow the context window.
 //
-// little-coder drives SMALL local models with small context windows
-// (`context_limit` is 32768 in .pi/settings.json, and the live window is often
-// less). pi's built-in `read` returns up to ~2000 lines in a single tool result
+// little-coder drives SMALL local models with small context windows (the
+// model's registered contextWindow, read live below via getContextUsage()).
+// pi's built-in `read` returns up to ~2000 lines in a single tool result
 // — for a small model that one result can blow past the remaining budget, evict
 // earlier conversation, and wreck the run. That's exactly the class of failure
 // the harness-intervention layer exists to catch (cf. thinking-budget cap,

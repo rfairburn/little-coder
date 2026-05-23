@@ -2,6 +2,21 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.7.0] — 2026-05-23
+
+little-coder's context budget now follows the model's **live registered context window** instead of a hardcoded 32 768. Whatever window your provider declares for the active model (`contextWindow` in `models.json`, user-overridable) is what the whole harness budgets against — bump the model once and the TUI's context readout, read-guard's overflow trim, and the skill/knowledge-injection budgets all move together. This closes the common report: *"I bumped llama.cpp to 128k but little-coder still says 33k."*
+
+### Changed
+- **`context_limit` is no longer a hardcoded per-profile setting.** It's removed from `default_model_profile` and every base per-model profile in `.pi/settings.json`. `benchmark-profiles` now resolves the published `littleCoder.contextLimit` from the active model's `ctx.model.contextWindow` — the same registered window pi displays and `getContextUsage()` / `read-guard` already use. Precedence: an explicit per-profile/benchmark `context_limit` override → the model's registered window → `CONTEXT_FALLBACK` (32 768). New exported, tested `resolveContextLimit()`, plus an end-to-end test that fires `before_agent_start` against the real `settings.json`.
+  - Practical effect: to run at 128k, set `contextWindow: 131072` for the model in your `models.json` (or a `~/.config/little-coder/models.json` override). There's no second knob — every budget follows it. Previously you also had to edit the now-removed `context_limit`, and the budgeting extensions silently stayed at 32 768 even after you bumped the server.
+
+### Notes for upgraders
+- Behaviour is unchanged if your `models.json` declares `contextWindow: 32768` (the shipped default) — the resolved budget is still 32 768. Only models with a larger declared window see a change.
+- The **gaia** benchmark override keeps its explicit `context_limit: 65536` (an explicit override still wins). Real interactive usage was never turn- or context-capped and still isn't.
+- No CLI-flag or public-API changes. `littleCoder.contextLimit` is published under the same name; only its source moved from settings to the live model window.
+
+---
+
 ## [v1.6.1] — 2026-05-23
 
 A one-line whitelist tweak: `sed` is now an allowed bash command in `auto` permission mode. Stream-editing and line-range printing (`sed -n '1,20p' file`) are routine enough that gating them behind a per-deployment `LITTLE_CODER_BASH_ALLOW` was friction without a safety payoff — `sed` sits naturally alongside the already-allowed text-search tools (`grep`, `rg`, `find`).
