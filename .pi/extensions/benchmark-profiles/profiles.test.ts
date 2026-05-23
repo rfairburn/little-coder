@@ -21,7 +21,7 @@ describe("benchmark-profiles resolution against real settings.json", () => {
     const p = resolveProfileFrom(settings, "llamacpp/qwen3.6-35b-a3b", "terminal_bench");
     expect(p.thinking_budget).toBe(3000); // benchmark override kept
     expect(p.temperature).toBe(0.2);
-    expect(p.max_turns).toBe(80);
+    expect(p.max_turns).toBeUndefined(); // terminal_bench runs uncapped
     expect(p.context_limit).toBe(32768);
   });
 
