@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import setupSkillInject from "./index.ts";
 import setupKnowledgeInject from "../knowledge-inject/index.ts";
 
@@ -21,6 +24,8 @@ function handlerFor(setup: (pi: any) => void): Handler {
 }
 
 const ctx = { ui: { notify: () => {} } };
+let tempDir: string | undefined;
+const originalSettingsFile = process.env.LITTLE_CODER_SETTINGS_FILE;
 
 /** A turn event with the little-coder budgets the extensions expect. */
 function turn(prompt: string, systemPrompt = "BASE SYSTEM PROMPT") {
@@ -35,6 +40,15 @@ function turn(prompt: string, systemPrompt = "BASE SYSTEM PROMPT") {
 
 afterEach(() => {
   delete process.env.LITTLE_CODER_INJECT_MODE;
+  if (originalSettingsFile === undefined) {
+    delete process.env.LITTLE_CODER_SETTINGS_FILE;
+  } else {
+    process.env.LITTLE_CODER_SETTINGS_FILE = originalSettingsFile;
+  }
+  if (tempDir) {
+    rmSync(tempDir, { recursive: true });
+    tempDir = undefined;
+  }
 });
 
 describe("skill-inject still injects after the #73 conversion", () => {
@@ -91,6 +105,38 @@ describe("skill-inject still injects after the #73 conversion", () => {
   it("stays silent when nothing matches", async () => {
     const handler = handlerFor(setupSkillInject);
     expect(await handler(turn("zzzz"), ctx)).toBeUndefined();
+  });
+
+  it("delivers matched user skills in the same hidden tail message", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "little-coder-user-skills-"));
+    const skillsDir = join(tempDir, "skills");
+    const skillDir = join(skillsDir, "fleetdm");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, "SKILL.md"),
+      "---\nname: fixture\nkeywords: [codexfixture, confidential]\ntoken_cost: 50\n---\nKeep fixture data confidential.",
+    );
+    const settingsPath = join(tempDir, "settings.json");
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        little_coder: {
+          user_skills: { enabled: true, dir: skillsDir, token_budget: 100, min_score: 2 },
+        },
+      }),
+    );
+    process.env.LITTLE_CODER_SETTINGS_FILE = settingsPath;
+
+    vi.resetModules();
+    const { default: isolatedSetupSkillInject } = await import("./index.ts");
+    const handler = handlerFor(isolatedSetupSkillInject);
+    const result = await handler(turn("is codexfixture/confidential?"), ctx);
+
+    expect(result?.message?.customType).toBe("lc-skills");
+    expect(result.message.content).toContain("## User Skills");
+    expect(result.message.content).toContain("### fixture");
+    expect(result.message.content).toContain("Keep fixture data confidential.");
+    expect(result.systemPrompt).toBeUndefined();
   });
 });
 
