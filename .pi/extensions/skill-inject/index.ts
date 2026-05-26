@@ -268,15 +268,17 @@ function loadUserSkills(config: UserSkillsConfig): void {
 function scoreUserSkill(userText: string, skill: UserSkill): number {
   if (skill.keywords.length === 0) return 0;
   const textLower = userText.toLowerCase();
-  const words = new Set(textLower.split(/\s+/).filter(Boolean));
+  // Split on whitespace AND strip punctuation so "fleetdm/confidential?" yields ["fleetdm", "confidential"]
+  const words = new Set(textLower.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean));
   let score = 0;
   for (const kw of skill.keywords) {
     if (kw.includes(" ")) {
       // Multi-word phrase match
       if (textLower.includes(kw)) score += 2.0;
     } else {
-      // Single word match
-      if (words.has(kw)) score += 1.0;
+      // Single word match (also strip non-alnum from keyword)
+      const cleanKw = kw.replace(/[^a-z0-9]/g, "");
+      if (cleanKw && words.has(cleanKw)) score += 1.0;
     }
   }
   return score;
@@ -380,7 +382,6 @@ export default function (pi: ExtensionAPI) {
       userSkillsConfig = getUserSkillsConfig(opts);
       if (userSkillsConfig) loadUserSkills(userSkillsConfig);
     }
-
     // Allow-list source: prefer systemPromptOptions (set by tool-gating's
     // before_agent_start), but fall back to LITTLE_CODER_ALLOWED_TOOLS env
     // directly. Pi runs before_agent_start handlers in extension load order
@@ -414,6 +415,7 @@ export default function (pi: ExtensionAPI) {
           userSkillsConfig.minScore,
         )
       : [];
+
 
     if (selected.length === 0 && selectedUserSkills.length === 0 && !researchTask) return;
 
@@ -451,7 +453,7 @@ export default function (pi: ExtensionAPI) {
         parts.push(`+${selected.length} [${selected.map((s) => s.targetTool).join(",")}]`);
       }
       if (selectedUserSkills.length > 0) {
-        parts.push(`+${selectedUserSkills.length}user [${selectedUserSkills.map((s) => s.name).join(",")}]`);
+        parts.push(`+${selectedUserSkills.length} user [${selectedUserSkills.map((s) => s.name).join(",")}]`);
       }
       if (researchTask) parts.push("+research-directive");
       ctx.ui.notify(`skill-inject: ${parts.join(" ")}`, "info");
