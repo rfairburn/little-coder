@@ -2,6 +2,17 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.8.2] — 2026-05-25
+
+### Fixed
+- **Minimal user `models.json` entries no longer crash startup with `Cannot read properties of undefined (reading 'input')`** ([#36](https://github.com/itayinbarr/little-coder/issues/36)). The shipped `models.json` declares every field — `id`, `name`, `reasoning`, `input`, `contextWindow`, `maxTokens`, `cost` — but a user override that omitted e.g. `name`/`maxTokens`/`cost` was passed through unchanged to pi's registry, which then exploded deep in `applyModelOverride` when it tried to read `model.cost.input`. `llama-cpp-provider` now fills in the same defaults pi uses for built-in models (`name = id`, `reasoning = false`, `input = ["text"]`, `contextWindow = 32768`, `maxTokens = 4096`, zero-cost) so a minimal entry — just `id` plus the provider's `baseUrl`/`apiKey` — works. User-supplied values still win over defaults; unknown extra fields (e.g. `_launch`) are preserved. A model entry that omits `id` is now flagged with a precise error in the source diagnostics instead of crashing pi. New `fillModelDefaults` helper, plus regression tests using the exact entry shape from the issue report.
+- **`temperature' is not supported with this model` against Copilot GPT-5.x / OpenAI o-series** ([#33](https://github.com/itayinbarr/little-coder/issues/33)). `benchmark-profiles` was injecting `temperature: 0.3` from `default_model_profile` into every outgoing chat-completions payload, but hosted reasoning models hard-reject the parameter with a 400. The temperature injection is now gated on the provider: it ships on for `llamacpp`, `ollama`, and `lmstudio` (the providers it was tuned for) and is skipped for everything else. New env var `LITTLE_CODER_TEMPERATURE_PROVIDERS=foo,bar` replaces the default list when you bring your own local provider (e.g. `vllm`). New exported, tested `providerAcceptsTemperature()`; end-to-end test fires `before_agent_start` + `before_provider_request` and asserts the copilot path returns no payload mutation.
+
+### Notes for upgraders
+- No CLI-flag or public-API changes. If you previously relied on temperature 0.3 reaching a non-local provider via the default profile (uncommon — most hosted providers reject it), add that provider name to `LITTLE_CODER_TEMPERATURE_PROVIDERS`.
+
+---
+
 ## [v1.8.1] — 2026-05-23
 
 ### Fixed

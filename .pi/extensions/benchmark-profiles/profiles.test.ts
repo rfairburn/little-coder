@@ -7,6 +7,7 @@ import benchmarkProfiles, {
   normKey,
   resolveContextLimit,
   CONTEXT_FALLBACK,
+  providerAcceptsTemperature,
 } from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -146,5 +147,57 @@ describe("before_agent_start publishes a model-window contextLimit", () => {
       "gaia",
     );
     expect(lc.contextLimit).toBe(65536);
+  });
+});
+
+describe("providerAcceptsTemperature (issue #33)", () => {
+  it("accepts the shipped local providers by default", () => {
+    expect(providerAcceptsTemperature("llamacpp", {})).toBe(true);
+    expect(providerAcceptsTemperature("ollama", {})).toBe(true);
+    expect(providerAcceptsTemperature("lmstudio", {})).toBe(true);
+  });
+  it("rejects hosted reasoning providers that 400 on temperature", () => {
+    expect(providerAcceptsTemperature("copilot", {})).toBe(false);
+    expect(providerAcceptsTemperature("openai", {})).toBe(false);
+    expect(providerAcceptsTemperature("anthropic", {})).toBe(false);
+  });
+  it("LITTLE_CODER_TEMPERATURE_PROVIDERS env replaces the default list", () => {
+    const env = { LITTLE_CODER_TEMPERATURE_PROVIDERS: "vllm, my-local" };
+    expect(providerAcceptsTemperature("vllm", env)).toBe(true);
+    expect(providerAcceptsTemperature("my-local", env)).toBe(true);
+    expect(providerAcceptsTemperature("llamacpp", env)).toBe(false);
+  });
+});
+
+describe("before_provider_request only injects temperature for accepting providers", () => {
+  async function runHandlers(model: any, payload: any) {
+    const handlers: Record<string, ((e: any, c: any) => any)[]> = {};
+    const pi = { on: (n: string, h: any) => ((handlers[n] ??= []).push(h)) };
+    benchmarkProfiles(pi as any);
+    const startEvent: any = { systemPromptOptions: {} };
+    const ctx: any = { model };
+    for (const h of handlers["before_agent_start"] ?? []) await h(startEvent, ctx);
+    const reqEvent: any = { payload };
+    let lastResult: any;
+    for (const h of handlers["before_provider_request"] ?? []) {
+      lastResult = await h(reqEvent, ctx);
+    }
+    return lastResult;
+  }
+
+  it("injects temperature for a local llamacpp model", async () => {
+    const out = await runHandlers(
+      { provider: "llamacpp", id: "qwen3.6-27b", contextWindow: 131072 },
+      { messages: [] },
+    );
+    expect(out).toMatchObject({ temperature: 0.3 });
+  });
+
+  it("does NOT inject temperature for copilot/gpt-5.x (issue #33)", async () => {
+    const out = await runHandlers(
+      { provider: "copilot", id: "gpt-5.4", contextWindow: 131072 },
+      { messages: [] },
+    );
+    expect(out).toBeUndefined();
   });
 });

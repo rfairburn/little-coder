@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   applyEnvOverrides,
+  fillModelDefaults,
   loadProviders,
   mergeProviders,
   resolveOverridePath,
@@ -192,6 +193,121 @@ describe("shipped models.json", () => {
   it("still registers llamacpp and ollama alongside lmstudio", () => {
     const result = loadProviders(pkgRoot, {});
     expect(Object.keys(result.providers).sort()).toEqual(["llamacpp", "lmstudio", "ollama"]);
+  });
+});
+
+describe("fillModelDefaults (issue #36)", () => {
+  // The crash was: a user models.json entry that omitted name/maxTokens/cost
+  // reached pi's registry as `model.cost === undefined`, which then exploded
+  // with "Cannot read properties of undefined (reading 'input')" deep in
+  // applyModelOverride. Filling the same defaults pi uses internally lets a
+  // minimal entry round-trip safely.
+  it("fills name/maxTokens/cost/input/contextWindow/reasoning when missing", () => {
+    const out = fillModelDefaults({ id: "foo.gguf" }, "llamacpp", 0);
+    expect(out).toMatchObject({
+      id: "foo.gguf",
+      name: "foo.gguf",
+      reasoning: false,
+      input: ["text"],
+      contextWindow: 32768,
+      maxTokens: 4096,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    });
+  });
+
+  it("preserves user-supplied values over defaults", () => {
+    const out = fillModelDefaults(
+      {
+        id: "Qwen3.6-27B-Q4_K_M.gguf",
+        reasoning: true,
+        input: ["text", "image"],
+        contextWindow: 262144,
+      },
+      "llamacpp",
+      0,
+    );
+    expect(out.reasoning).toBe(true);
+    expect(out.input).toEqual(["text", "image"]);
+    expect(out.contextWindow).toBe(262144);
+    // Still defaulted:
+    expect(out.maxTokens).toBe(4096);
+    expect(out.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+  });
+
+  it("preserves unknown extra fields (e.g. _launch)", () => {
+    const out: any = fillModelDefaults({ id: "x", _launch: true }, "llamacpp", 0);
+    expect(out._launch).toBe(true);
+  });
+
+  it("throws with a precise pointer when id is missing", () => {
+    expect(() => fillModelDefaults({}, "llamacpp", 2)).toThrow(/provider 'llamacpp' model at index 2/);
+    expect(() => fillModelDefaults({ id: "" }, "llamacpp", 0)).toThrow(/missing or invalid "id"/);
+  });
+});
+
+describe("loadProviders with an under-specified user override (issue #36)", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "lc-providers36-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("a minimal user model entry no longer leaves cost undefined", () => {
+    writeFileSync(join(dir, "models.json"), JSON.stringify({ providers: {} }));
+    const userPath = join(dir, "user.json");
+    writeFileSync(
+      userPath,
+      JSON.stringify({
+        providers: {
+          llamacpp: {
+            api: "openai-completions",
+            apiKey: "llama",
+            baseUrl: "http://127.0.0.1:8020/v1",
+            models: [
+              {
+                _launch: true,
+                contextWindow: 262144,
+                id: "Qwen3.6-27B-Q4_K_M.gguf",
+                input: ["text", "image"],
+                reasoning: true,
+              },
+            ],
+          },
+        },
+      }),
+    );
+    const result = loadProviders(dir, { LITTLE_CODER_MODELS_FILE: userPath });
+    const m = result.providers.llamacpp.models[0];
+    expect(m.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    expect(m.maxTokens).toBe(4096);
+    expect(m.name).toBe("Qwen3.6-27B-Q4_K_M.gguf");
+    // User-supplied values must win:
+    expect(m.contextWindow).toBe(262144);
+    expect(m.input).toEqual(["text", "image"]);
+  });
+
+  it("a model entry without an id is reported as invalid, not silently passed through", () => {
+    writeFileSync(join(dir, "models.json"), JSON.stringify({ providers: {} }));
+    const userPath = join(dir, "user.json");
+    writeFileSync(
+      userPath,
+      JSON.stringify({
+        providers: {
+          llamacpp: {
+            api: "openai-completions",
+            apiKey: "k",
+            baseUrl: "http://x/v1",
+            models: [{ reasoning: true }],
+          },
+        },
+      }),
+    );
+    const result = loadProviders(dir, { LITTLE_CODER_MODELS_FILE: userPath });
+    const userSrc = result.sources.find((s) => s.path === userPath);
+    expect(userSrc?.status).toBe("invalid");
+    expect(userSrc?.error).toMatch(/missing or invalid "id"/);
   });
 });
 

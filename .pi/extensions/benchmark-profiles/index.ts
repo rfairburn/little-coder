@@ -163,10 +163,29 @@ function toLittleCoderOptions(p: ModelProfile): Record<string, unknown> {
   return out;
 }
 
+// Providers whose servers accept a `temperature` field on chat-completions.
+// little-coder's temperature defaults are tuned for the local-server case;
+// hosted reasoning models (Copilot's gpt-5.x, OpenAI o-series) hard-reject
+// the parameter with a 400 (issue #33). The list is intentionally minimal:
+// llama.cpp-style local servers. Override at runtime via
+// LITTLE_CODER_TEMPERATURE_PROVIDERS=foo,bar to add your own local provider.
+const DEFAULT_TEMPERATURE_PROVIDERS = ["llamacpp", "ollama", "lmstudio"] as const;
+
+export function providerAcceptsTemperature(provider: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const override = env.LITTLE_CODER_TEMPERATURE_PROVIDERS;
+  const list = override
+    ? override.split(",").map((s) => s.trim()).filter(Boolean)
+    : (DEFAULT_TEMPERATURE_PROVIDERS as readonly string[]);
+  return list.includes(provider);
+}
+
 export default function (pi: ExtensionAPI) {
   // Shared across handlers so before_provider_request can re-read the most
   // recently resolved temperature without re-parsing settings every turn.
   let resolvedTemperature: number | undefined;
+  // Provider-level guard: hosted reasoning models reject `temperature` (see
+  // DEFAULT_TEMPERATURE_PROVIDERS above).
+  let temperatureAccepted = false;
 
   pi.on("before_agent_start", async (event, ctx) => {
     const model = ctx.model;
@@ -193,6 +212,7 @@ export default function (pi: ExtensionAPI) {
     opts.littleCoder.contextLimit = resolveContextLimit(profile.context_limit, modelWindow);
 
     resolvedTemperature = opts.littleCoder.temperature;
+    temperatureAccepted = providerAcceptsTemperature(model.provider);
   });
 
   // Inject the profile's temperature onto the outgoing provider payload.
@@ -200,10 +220,14 @@ export default function (pi: ExtensionAPI) {
   // llama.cpp), which adds measurable stochastic variance on hard
   // algorithmic exercises. Matches local-coder's profiles[].temperature=0.3.
   //
+  // Skipped for providers whose servers reject `temperature` (Copilot's
+  // gpt-5.x, OpenAI's o-series) — see providerAcceptsTemperature.
+  //
   // IMPORTANT: pi's runner passes payload by reference but only adopts
   // *returned* values. Mutating in place is discarded between handlers, so
   // we build a new payload object and return it explicitly.
   pi.on("before_provider_request", async (event) => {
+    if (!temperatureAccepted) return;
     if (resolvedTemperature === undefined) return;
     const payload: any = (event as any).payload;
     if (!payload || typeof payload !== "object") return;

@@ -67,7 +67,40 @@ function parseModelsFile(raw: string): ModelsFile {
   if (!parsed || typeof parsed !== "object" || !parsed.providers || typeof parsed.providers !== "object") {
     throw new Error("expected top-level { providers: { ... } }");
   }
+  const providers = parsed.providers as Record<string, ProviderEntry>;
+  for (const [name, entry] of Object.entries(providers)) {
+    if (!entry || typeof entry !== "object" || !Array.isArray(entry.models)) continue;
+    entry.models = entry.models.map((m, i) => fillModelDefaults(m, name, i));
+  }
   return parsed as ModelsFile;
+}
+
+/**
+ * Fill in defaults for optional model fields that pi requires downstream.
+ * pi's `registerProvider` path stores model entries verbatim, so a user
+ * override that omits e.g. `cost` ends up with `model.cost === undefined`,
+ * and the model registry's per-model override path crashes with
+ * "Cannot read properties of undefined (reading 'input')" (issue #36) when
+ * it tries to read `model.cost.input`. Filling the same defaults pi uses
+ * for built-in models means a minimal user entry — just an id — works.
+ *
+ * The `id` field is the only true requirement. We throw with a precise
+ * pointer when it's missing so the caller can route this to the source-list
+ * diagnostics rather than crashing pi.
+ */
+export function fillModelDefaults(m: any, providerName: string, index: number): ProviderModelEntry {
+  if (!m || typeof m !== "object" || typeof m.id !== "string" || m.id.length === 0) {
+    throw new Error(`provider '${providerName}' model at index ${index}: missing or invalid "id"`);
+  }
+  const defaults = {
+    name: m.id,
+    reasoning: false,
+    input: ["text"] as ("text" | "image")[],
+    contextWindow: 32768,
+    maxTokens: 4096,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  };
+  return { ...defaults, ...m };
 }
 
 function readIfPresent(path: string): { kind: "ok"; data: ModelsFile } | { kind: "missing" } | { kind: "invalid"; error: string } {
