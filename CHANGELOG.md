@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.8.3] — 2026-06-08
+
+### Fixed
+- **User `models.json` is now found on Windows when `HOME` is unset** ([#43](https://github.com/itayinbarr/little-coder/pull/43), thanks [@A-M-D-R-3-W](https://github.com/A-M-D-R-3-W)). Windows doesn't guarantee `HOME`, but it does set `USERPROFILE`. The documented fallback `~/.config/little-coder/models.json` was therefore skipped on Windows and user-defined models never registered. `resolveOverridePath()` now falls back to `USERPROFILE` when `HOME` is absent (resolution order is unchanged where `HOME` exists: `$LITTLE_CODER_MODELS_FILE` → `$XDG_CONFIG_HOME` → `$HOME`/`$USERPROFILE` `/.config`). Path-resolution tests are now platform-neutral via `path.join`.
+
+### Documentation
+- **Added an "Any OpenAI-compatible server (e.g. MLX / omlx)" section** to the model-configuration docs ([#40](https://github.com/itayinbarr/little-coder/issues/40)). little-coder registers providers from `models.json` rather than from pi's standalone picker extensions, so an omlx/MLX server is added by declaring a provider entry (any OpenAI-compatible `/v1` endpoint works the same way), not by installing its pi picker. The README now shows the exact `~/.config/little-coder/models.json` block.
+
+---
+
 ## [v1.8.2] — 2026-05-25
 
 ### Fixed

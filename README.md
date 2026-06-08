@@ -188,6 +188,35 @@ Then verify with `little-coder --list-models` — you should see your overridden
 
 `LLAMACPP_BASE_URL`, `OLLAMA_BASE_URL`, and `LMSTUDIO_BASE_URL` env vars still beat both files for those three providers.
 
+### Any OpenAI-compatible server (e.g. MLX / omlx)
+
+little-coder registers providers from `models.json` — it doesn't pick up pi's standalone "picker" extensions. So a server isn't added by installing its pi picker; you add it by declaring a provider. Any OpenAI-compatible endpoint works this way, including Apple's MLX server (`mlx_lm.server`, often surfaced as **omlx**). Drop this into `~/.config/little-coder/models.json` and pick it with `little-coder --model omlx/<id>`:
+
+```json
+{
+  "providers": {
+    "omlx": {
+      "api": "openai-completions",
+      "baseUrl": "http://127.0.0.1:8000/v1",
+      "apiKey": "IGNORED",
+      "models": [
+        {
+          "id": "Qwen3-32B-4bit",
+          "name": "Qwen3.6-35B-A3B (local omlx, 150K)",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 150000,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
+```
+
+Set `id` to whatever model your server reports, and `baseUrl` to its `/v1` endpoint. Verify with `little-coder --list-models`.
+
 `.pi/settings.json` is a separate concern: it controls per-model **profiles** (context_limit, thinking_budget, temperature, benchmark_overrides) referenced by the `<provider>/<id>` key. Profiles don't register or describe models — they only tune how little-coder runs against models that are already registered.
 
 ---
