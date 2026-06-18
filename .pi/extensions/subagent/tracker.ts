@@ -7,6 +7,7 @@
 // active theme and the string[] form of setWidget can be used directly.
 
 import { summarizeActivity, type SubCoderResult } from "./spawn.ts";
+import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -130,7 +131,13 @@ export class SubCoderTracker {
       return `  ${icon} ${padEnd(r.label, labelWidth)}  ${gray(padEnd(elapsed, 5))}  ${gray(activity)}`;
     });
 
-    const lines = [header, ...rows];
+    // Cap every line to the active terminal width — pi-tui throws if a custom
+    // widget renders a line wider than the terminal (issue #48). The activity
+    // text in rows can be unbounded (failed sub-coders surface raw stderr /
+    // errorMessage, which routinely runs ~200 chars), so without this each
+    // failing dispatch turn would crash the whole session.
+    const width = terminalColumns();
+    const lines = [header, ...rows].map((l) => truncateLineToWidth(l, width));
     const frameKey = lines.join("\n");
     if (frameKey === this.lastFrame) return; // diff-guard: skip identical repaints
     this.lastFrame = frameKey;

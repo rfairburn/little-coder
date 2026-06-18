@@ -64,6 +64,15 @@ describe("summarizeActivity", () => {
   it("falls back to working when running with no tool call", () => {
     expect(summarizeActivity(base)).toBe("working…");
   });
+  it("caps long error messages on failure (issue #48 regression)", () => {
+    const longErr =
+      "child process exited with non-zero code 1: " +
+      "Error: provider \"llamacpp\" — failed to reach " +
+      "http://127.0.0.1:8888/v1/chat/completions: ECONNREFUSED";
+    const out = summarizeActivity({ ...base, exitCode: 1, errorMessage: longErr });
+    expect(out.length).toBeLessThanOrEqual(56);
+    expect(out.endsWith("…")).toBe(true);
+  });
 });
 
 describe("buildChildEnv", () => {

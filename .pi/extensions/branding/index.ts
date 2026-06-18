@@ -2,6 +2,7 @@ import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { truncateLineToWidth } from "../_shared/width.ts";
 
 // Replace pi's built-in startup header + terminal title with little-coder
 // branding. The interactive TUI's "pi vX.Y.Z" logo, the "Pi can explain its
@@ -46,7 +47,7 @@ function readVersion(): string {
 
 const VERSION = readVersion();
 
-function buildHeader(theme: Theme): string[] {
+function buildHeader(theme: Theme, width: number): string[] {
   // Brand-book "prompt lockup" (the variant the brand reserves for terminals
   // and dark surfaces): a honey prompt caret, the wordmark in the foreground,
   // and the honey block cursor — "lc▌"'s ready-to-type punchline, applied to
@@ -67,7 +68,11 @@ function buildHeader(theme: Theme): string[] {
     `${dim("!")} bash`,
     `${dim("ctrl-r")} more`,
   ].join(sep);
-  return ["", logo, tagline, "", hints, ""];
+  // pi-tui throws if any rendered line exceeds the terminal width (issue #48).
+  // Truncate every line we hand it so a narrow terminal can't crash the launch.
+  return ["", logo, tagline, "", hints, ""].map((l) =>
+    l ? truncateLineToWidth(l, width) : l,
+  );
 }
 
 // Derive a short, human session name from the first user prompt. Returns
@@ -111,8 +116,8 @@ export default function (pi: ExtensionAPI) {
     if (!ctx.hasUI) return;
 
     ctx.ui.setHeader((_tui, theme) => ({
-      render(_width: number): string[] {
-        return buildHeader(theme);
+      render(width: number): string[] {
+        return buildHeader(theme, width);
       },
       invalidate() {},
     }));

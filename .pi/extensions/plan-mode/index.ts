@@ -9,6 +9,7 @@ import {
 import { SubCoderTracker } from "../subagent/tracker.ts";
 import { currentModelId } from "../subagent/index.ts";
 import { PlanStatus } from "./status.ts";
+import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
 
 // Plan Mode — a Claude-Code-style "research, ask, then plan" flow.
 //
@@ -49,7 +50,11 @@ let pendingSynthesis: { digest: string; answers: string } | null = null;
 let synthesisActive = false;
 
 function indicatorLines(): string[] {
-  return [`${honey("◆")} ${honey("PLAN MODE")}  ${gray("(alt+p to exit)")}`];
+  // Cap to terminal width — pi-tui throws on overflow (issue #48). The
+  // indicator is short, but truncate for defense in depth so even a narrow
+  // terminal (≤ 30 cols) doesn't crash on widget render.
+  const raw = `${honey("◆")} ${honey("PLAN MODE")}  ${gray("(alt+p to exit)")}`;
+  return [truncateLineToWidth(raw, terminalColumns())];
 }
 
 function setIndicator(ctx: any, on: boolean): void {

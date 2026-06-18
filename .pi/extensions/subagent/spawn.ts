@@ -131,11 +131,20 @@ export function truncateReport(text: string, max = MAX_REPORT_CHARS): string {
 
 /** A one-line "what is this child doing right now" string for the tracker. */
 export function summarizeActivity(r: SubCoderResult): string {
+  const cap = (s: string, n = 56): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   if (r.exitCode === 0) {
     const firstLine = r.report.split(/\r?\n/).find((l) => l.trim()) ?? "(done)";
-    return firstLine.length > 56 ? `${firstLine.slice(0, 55)}…` : firstLine;
+    return cap(firstLine);
   }
-  if (r.exitCode > 0) return r.errorMessage || r.stderr.split(/\r?\n/)[0] || "(failed)";
+  if (r.exitCode > 0) {
+    // The error path used to return raw errorMessage / stderr UNCAPPED, which
+    // routinely runs ~200 chars (a child process error with a URL + stack
+    // fragment). The tracker passes that straight into a widget line, and any
+    // line wider than the terminal crashes pi-tui (issue #48). Cap here so the
+    // source string is bounded; the widget also truncates the assembled row
+    // for defense in depth.
+    return cap(r.errorMessage || r.stderr.split(/\r?\n/)[0] || "(failed)");
+  }
   // running: surface the most recent tool call, else the latest partial text.
   for (let i = r.messages.length - 1; i >= 0; i--) {
     const m = r.messages[i];
@@ -145,7 +154,7 @@ export function summarizeActivity(r: SubCoderResult): string {
         if (part?.type === "toolCall") {
           const a = part.arguments ?? {};
           const hint = a.pattern || a.query || a.url || a.path || a.file_path || a.command || "";
-          return `→ ${part.name}${hint ? ` ${String(hint).slice(0, 40)}` : ""}`;
+          return cap(`→ ${part.name}${hint ? ` ${String(hint).slice(0, 40)}` : ""}`);
         }
       }
     }

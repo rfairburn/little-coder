@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.2] — 2026-06-18
+
+### Fixed
+- **Width-overflow crash from custom widgets** ([#48](https://github.com/itayinbarr/little-coder/issues/48)). pi-tui throws `Rendered line N exceeds terminal width` whenever a custom TUI component emits a line wider than the active terminal — the user saw a 198-char line at width 184 take down the whole session. Root cause was the **sub-coder tracker** (`subagent/tracker.ts`): a failed sub-coder's `errorMessage` flowed straight into a widget row without any cap, and real-world child-process errors routinely run 150-250 chars (transport error + URL + retry count is enough). The tracker now caps every emitted row to the active terminal width using a new `_shared/width.ts` utility (`visibleWidth` + `truncateLineToWidth`, ANSI-aware so SGR colour codes are preserved through the cut and a final reset prevents bleed). `summarizeActivity` also gained a 56-char cap on the failure path (was uncapped) and the running path (was uncapped on `part.name`) for defense in depth. The same width-cap is now applied to the **plan-mode status panel**, the **plan-mode indicator**, and the **branding startup header** (which now uses the `width` arg pi passes to `render()` instead of returning hardcoded-length lines), so a narrow terminal can no longer crash launch either. New `width.test.ts` (9 cases) covers ASCII / SGR / OSC hyperlink / colour-bleed / the exact issue-48 reproduction shape, and `issue-48-repro.test.ts` drives the tracker directly with a 167-char failure at width 184 and asserts no emitted row exceeds the terminal.
+
+### Notes for upgraders
+- No CLI-flag or public-API changes. If you ever saw `Rendered line N exceeds terminal width (… > …)` crash a session — particularly during a `dispatch` call that errored, or while Plan Mode was orchestrating sub-coders — 1.9.2 fixes it. Third-party pi extensions (e.g. `context-mode`) that emit their own widgets remain subject to pi's check; if you still see the crash with `Loaded pi extensions: <name>` listed, the offending widget is in that extension, not little-coder.
+
+---
+
 ## [v1.9.1] — 2026-06-08
 
 ### Fixed

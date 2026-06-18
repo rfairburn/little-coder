@@ -7,6 +7,8 @@
 // (needed to animate the spinner + tick the clock), colored with raw SGR so it
 // doesn't depend on the active theme.
 
+import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
+
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const honey = (s: string) => `\x1b[38;2;225;90;31m${s}\x1b[39m`;
 const gray = (s: string) => `\x1b[90m${s}\x1b[39m`;
@@ -71,7 +73,11 @@ export class PlanStatus {
     if (!this.ctx.hasUI) return;
     const now = Date.now();
     const frame = SPINNER[Math.floor(now / 100) % SPINNER.length];
-    const line = `${honey(frame)} ${this.message}  ${gray(fmtElapsed(now - this.startMs))}`;
+    const raw = `${honey(frame)} ${this.message}  ${gray(fmtElapsed(now - this.startMs))}`;
+    // Cap to terminal width — pi-tui throws on overflow (issue #48). Our own
+    // phase messages are short, but the line is still passed through for
+    // defense-in-depth (a future caller, or a long custom message, won't crash).
+    const line = truncateLineToWidth(raw, terminalColumns());
     if (line === this.lastFrame) return; // diff-guard
     this.lastFrame = line;
     this.ctx.ui.setWidget(this.key, [line], { placement: this.placement });
