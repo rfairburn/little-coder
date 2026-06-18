@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.5] — 2026-06-18
+
+### Changed
+- **Dispatch tool-result panel now word-wraps wide report lines instead of truncating them** ([PR #49](https://github.com/itayinbarr/little-coder/pull/49) by [@steverhoades](https://github.com/steverhoades), closes [#48](https://github.com/itayinbarr/little-coder/issues/48) and [#51](https://github.com/itayinbarr/little-coder/issues/51)). v1.9.4 fixed the width-overflow crash by truncating each panel line to `width - 2` with an ellipsis; v1.9.5 replaces the truncation with **word-wrap** so the full sentence survives across multiple visual lines — a strictly better UX for markdown sub-coder reports than dropping the tail at char 131. The cherry-picked commit (steverhoades's authorship preserved) keeps the wrap helpers (ANSI-aware prefix extraction, long-token chunking for whitespace-free URLs/paths/base64 that would otherwise defeat word-wrap, plain-text word-wrap), and the `makeComponent.render(width)` is rebased onto v1.9.4's `width - 2` safety margin so wide-unicode chars our char-count `visibleWidth` undercounts still can't sneak past pi's strict line-width check. Inspiration for the long-token sanitizer credited in-source to [openclaw-cn's tui-formatters.ts](https://github.com/mf-yang/openclaw-cn/commit/8c822da26f0a77396107a31f09df60817bf39c98). `issue-51-repro.test.ts` updated for wrap semantics (4 cases): no emitted line exceeds; the wrapped lines round-trip to the original 134-char sentence verbatim (no data loss); narrow terminal (40 cols) survives; 200-char URL-ish tokens get chunked so wrapping has room to split.
+
+### Notes for upgraders
+- No CLI-flag or public-API changes. If you upgraded from v1.9.3 → v1.9.4 → v1.9.5, the user-visible difference between the last two is just wrap-vs-truncate in the dispatch tool's expanded report panel — both eliminate the crash. If you saw an ellipsis at the right edge of a sub-coder report on v1.9.4, you'll now see the full sentence wrapped onto the next line instead.
+
+---
+
 ## [v1.9.4] — 2026-06-18
 
 ### Fixed
