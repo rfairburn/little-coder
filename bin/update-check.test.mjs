@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   cachePath,
   readCache,
@@ -9,6 +10,8 @@ import {
   compareSemver,
   shouldSkip,
 } from "./update-check.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 describe("compareSemver", () => {
   it("orders major / minor / patch correctly", () => {
@@ -168,5 +171,23 @@ describe("shouldSkip", () => {
 
   it("notice-only still applies with --update on non-TTY", () => {
     expect(shouldSkip(["--update"], noEnv, pipeStdout())).toBe("notice-only");
+  });
+});
+
+// Static regression for issue #50: the auto-updater must invoke npm with
+// `--ignore-scripts` so a compromised dep can't land arbitrary code via a
+// postinstall hook during upgrade (Shai Hulud-style attack vector). Source
+// grep — not a runtime exercise — because the actual spawn path is
+// interactive (prompts the user) and hard to unit-test cleanly. If someone
+// removes the flag, the grep fails and CI surfaces it.
+describe("supply-chain protection (issue #50)", () => {
+  const src = readFileSync(join(HERE, "update-check.mjs"), "utf-8");
+
+  it("passes --ignore-scripts to the actual spawn", () => {
+    expect(src).toMatch(/"install",\s*"-g",\s*"--ignore-scripts"/);
+  });
+
+  it("surfaces the flag in the user-visible command line", () => {
+    expect(src).toContain("npm install -g --ignore-scripts little-coder");
   });
 });

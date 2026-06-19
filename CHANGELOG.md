@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.7] — 2026-06-19
+
+### Security
+- **Auto-updater now passes `--ignore-scripts` to npm so a compromised package can't run arbitrary code during upgrade** ([#50](https://github.com/itayinbarr/little-coder/issues/50) by [@steverhoades](https://github.com/steverhoades)). Lifecycle scripts (`preinstall` / `install` / `postinstall`) are the entry vector that Shai Hulud-style worms (and any other npm postinstall malware) use to land code execution the moment a compromised version of little-coder or one of its transitive deps is published. The launcher's auto-update path (`bin/update-check.mjs`) now invokes `npm install -g --ignore-scripts little-coder@<latest>`, matching pi's posture upstream. The notice-only message shown on non-TTY pipelines was updated in the same change so the manual recovery command surfaces the flag too. Scoped to the auto-updater only — first-install via `install.sh` / `npm install -g little-coder` still runs scripts so playwright's chromium download (used by browser-extract-retention's live integration test) lands during onboarding; on patch upgrades the binary is already on disk from that first install, so `--ignore-scripts` is the safer default there. Two new tests pin the flag in the source (a removal in either the spawn args or the user-visible command string fails the suite).
+
+### Docs
+- **Troubleshooting entries for `--update` and the Windows ≤ v1.9.5 bootstrap caveat** ([PR #53](https://github.com/itayinbarr/little-coder/pull/53) by [@i-snyder](https://github.com/i-snyder)). Documents that `little-coder --update` forces an immediate version check bypassing the 12h cache (and the flag is stripped before pi sees argv), and that users on the broken v1.9.5 Windows updater need a one-time `npm install -g little-coder@latest` to reach v1.9.6 (after which auto-update works normally). i-snyder's follow-up to PR #52, exactly as requested in the close comment.
+
+---
+
 ## [v1.9.6] — 2026-06-18
 
 ### Fixed

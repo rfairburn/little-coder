@@ -150,7 +150,9 @@ export async function checkForUpdate(currentVersion, opts = {}) {
     `\n📦 little-coder v${latest} is available (you have v${currentVersion}).`;
 
   if (skip === "notice-only") {
-    process.stderr.write(`${headline}\n   Update with: npm install -g little-coder\n\n`);
+    process.stderr.write(
+      `${headline}\n   Update with: npm install -g --ignore-scripts little-coder\n\n`,
+    );
     return false;
   }
 
@@ -161,12 +163,23 @@ export async function checkForUpdate(currentVersion, opts = {}) {
     return false;
   }
 
-  process.stderr.write(`\n   Running: npm install -g little-coder@${latest}\n\n`);
+  // --ignore-scripts blocks any preinstall/install/postinstall lifecycle
+  // hooks from running during the upgrade — the entry vector Shai Hulud-style
+  // worms (and any other npm-postinstall malware) use to land arbitrary code
+  // execution as soon as a compromised version of little-coder or one of its
+  // transitive deps is published. pi takes the same posture upstream (issue
+  // #50 cites their config.ts). The two postinstall scripts in our tree are
+  // playwright (chromium binary download — already on disk from the prior
+  // install for any patch upgrade) and benign metadata pings; both can be
+  // re-run manually if a major version ever needs them again.
+  process.stderr.write(
+    `\n   Running: npm install -g --ignore-scripts little-coder@${latest}\n\n`,
+  );
   // On Windows `npm` resolves to `npm.cmd`, a batch-file shim that Node's
   // spawnSync cannot execute without shell:true. However, shell:true with
   // array args triggers DEP0190 on Node 24+. Instead, invoke cmd.exe directly
   // via COMSPEC — it resolves `npm` to `npm.cmd` itself, no shell:true needed.
-  const npmArgs = ["install", "-g", `little-coder@${latest}`];
+  const npmArgs = ["install", "-g", "--ignore-scripts", `little-coder@${latest}`];
   const result = process.platform === "win32"
     ? spawnSync(process.env.COMSPEC || "cmd.exe", ["/c", "npm", ...npmArgs], { stdio: "inherit" })
     : spawnSync("npm", npmArgs, { stdio: "inherit" });
