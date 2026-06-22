@@ -2,6 +2,13 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.9] — 2026-06-22
+
+### Fixed
+- **Plan-mode toggle moved from `ctrl+y` to `ctrl+q` to clear a built-in shortcut conflict.** `ctrl+y` is the editor's built-in yank/paste (`tui.editor.yank`), so v1.9.8 logged an `[Extension issues]` conflict diagnostic at startup and the toggle overrode the editor's paste. The emacs-style editor claims nearly every other `ctrl+<letter>` (line motion, word/line deletes, etc.); `ctrl+q` is genuinely unbound, and because pi runs the terminal in raw mode (flow control disabled) it arrives as a clean `\x11` byte on every terminal — so the toggle works without a conflict and without shadowing any editor key. The indicator, leave-mode hint, and the startup shortcut-row CTA now read `ctrl-q`.
+
+---
+
 ## [v1.9.8] — 2026-06-22
 
 ### Fixed

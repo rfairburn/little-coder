@@ -13,7 +13,7 @@ import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
 
 // Plan Mode — a Claude-Code-style "research, ask, then plan" flow.
 //
-// ctrl+y toggles plan mode (an indicator appears below the input). While it is
+// ctrl+q toggles plan mode (an indicator appears below the input). While it is
 // on, submitting a prompt does NOT run a normal coding turn; instead the
 // extension orchestrates:
 //   1. decompose the request into 1-4 exploration tasks (a reasoning sub-coder),
@@ -28,10 +28,13 @@ import { terminalColumns, truncateLineToWidth } from "../_shared/width.ts";
 // child little-coder (spawned via ../subagent/spawn.ts), and the final plan is
 // injected as a normal turn via pi.sendUserMessage so it lands in the chat.
 //
-// ctrl+y is unbound by pi (and by the editor — no yank handler), so the
-// extension can claim it cleanly without shadowing any built-in (shift+tab stays
-// pi's thinking-level cycle — issue #47). It replaced alt+p, which many terminals
-// deliver as a literal "π" character rather than ESC+p, so the toggle never fired.
+// ctrl+q is unbound by pi AND by the emacs-style editor (which claims nearly
+// every other ctrl+<letter> — ctrl+y is its yank/paste, ctrl+a/e line motion,
+// etc.), so the extension can claim it cleanly without a conflict warning or
+// shadowing a built-in (shift+tab stays pi's thinking-level cycle — issue #47).
+// pi runs the terminal in raw mode (flow control off), so ctrl+q arrives as a
+// clean \x11 byte on every terminal — unlike alt+p, which many terminals deliver
+// as a literal "π" rather than ESC+p, so the original binding never fired.
 
 const honey = (s: string) => `\x1b[38;2;225;90;31m${s}\x1b[39m`;
 const gray = (s: string) => `\x1b[90m${s}\x1b[39m`;
@@ -55,7 +58,7 @@ function indicatorLines(): string[] {
   // Cap to terminal width — pi-tui throws on overflow (issue #48). The
   // indicator is short, but truncate for defense in depth so even a narrow
   // terminal (≤ 30 cols) doesn't crash on widget render.
-  const raw = `${honey("◆")} ${honey("PLAN MODE")}  ${gray("(ctrl-y to exit)")}`;
+  const raw = `${honey("◆")} ${honey("PLAN MODE")}  ${gray("(ctrl-q to exit)")}`;
   return [truncateLineToWidth(raw, terminalColumns())];
 }
 
@@ -275,12 +278,13 @@ async function orchestrate(pi: ExtensionAPI, ctx: any, prompt: string): Promise<
 }
 
 export default function (pi: ExtensionAPI) {
-  // ctrl+y toggles plan mode. pi leaves ctrl+y unbound (and the editor has no
-  // yank handler), so this doesn't collide with any built-in and shift+tab stays
-  // bound to pi's thinking-level cycle (issue #47). It replaced alt+p, which many
-  // terminals deliver as a literal "π" rather than ESC+p, so the toggle silently
-  // failed.
-  pi.registerShortcut("ctrl+y", {
+  // ctrl+q toggles plan mode. pi leaves ctrl+q unbound and the emacs-style editor
+  // doesn't claim it either (ctrl+y is its yank, so binding there both warned and
+  // clobbered paste), so this collides with nothing and shift+tab stays bound to
+  // pi's thinking-level cycle (issue #47). Raw mode disables flow control, so
+  // ctrl+q is a clean \x11 byte on every terminal — unlike alt+p, which many
+  // terminals deliver as a literal "π" rather than ESC+p, so the toggle never fired.
+  pi.registerShortcut("ctrl+q", {
     description: "Toggle plan mode",
     handler: (ctx: any) => {
       if (orchestrating) return; // mid-plan: ignore toggles
@@ -363,7 +367,7 @@ export default function (pi: ExtensionAPI) {
       });
     } else {
       (ctx as any).ui?.notify?.(
-        "plan not implemented — refine your request, or ctrl-y to leave plan mode",
+        "plan not implemented — refine your request, or ctrl-q to leave plan mode",
         "info",
       );
     }
