@@ -2,6 +2,16 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.8] — 2026-06-22
+
+### Fixed
+- **Plan-mode toggle is now `ctrl+y` instead of `alt+p`.** Many terminals (notably macOS) deliver Alt+P as the literal `π` character rather than an `ESC p` sequence, so pi's key matcher never matched and the toggle silently failed — pressing it just typed `π` into the input. `ctrl+y` is delivered as a clean control byte, is left unbound by both pi and the editor (no yank handler), and is dispatched to extension shortcuts before any editor handling, so it fires reliably. The plan-mode indicator and "leave plan mode" hint were updated to read `ctrl-y` to match.
+
+### Added
+- **A `ctrl-y plan` hint in the startup shortcut row** so the plan-mode toggle is discoverable alongside the existing `esc` / `/` / `ctrl-r` hints.
+
+---
+
 ## [v1.9.7] — 2026-06-19
 
 ### Security
