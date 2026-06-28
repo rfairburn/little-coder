@@ -2,6 +2,13 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.11] — 2026-06-28
+
+### Fixed
+- **The context window now re-probes when llama-swap swaps the loaded model** ([#54](https://github.com/itayinbarr/little-coder/issues/54) by [@cndjonno](https://github.com/cndjonno)). `llama-cpp-provider` probed the server's live `n_ctx` via `/props` only once at startup, so when llama-swap swapped a model under the same endpoint little-coder kept reporting the *old* window — and that's not cosmetic: the TUI readout, the read-guard, and the context-budget math all follow the registered window, so a stale value mis-sizes the budget. The extension now hooks pi's `model_select` event, re-probes `/props` whenever the active model changes to a llamacpp model, and re-registers the provider with the fresh window — with a one-line `context window updated 32k → 128k` notice so a drop like 128k → 16k can't silently mis-size things mid-task. It skips the initial selection (startup already probed), no-ops when the window is unchanged or the probe fails, and honors the existing `LITTLE_CODER_NO_CTX_PROBE=1` opt-out. Per-phase model selection (a big model for planning, a small one for implementation) is tracked separately in [#61](https://github.com/itayinbarr/little-coder/issues/61).
+
+---
+
 ## [v1.9.10] — 2026-06-28
 
 ### Fixed

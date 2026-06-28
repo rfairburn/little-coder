@@ -205,6 +205,33 @@ export function contextWindowFromProps(json: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+/** Re-stamp every model with a new context window (keeps all other fields). */
+export function withContextWindow(
+  models: ProviderModelEntry[],
+  contextWindow: number,
+): ProviderModelEntry[] {
+  return models.map((m) => ({ ...m, contextWindow }));
+}
+
+/** Human "Nk" label for a context window. llama.cpp n_ctx values are ×1024
+ *  multiples, so dividing by 1024 yields the clean numbers users expect
+ *  (131072 → "128k", 32768 → "32k"). */
+export function formatContextWindow(n: number): string {
+  return `${Math.round(n / 1024)}k`;
+}
+
+/** Decide whether a freshly probed window warrants a re-register + notice.
+ *  Returns the `{ from, to }` transition, or null when nothing should change —
+ *  the probe failed (undefined) or it matches the already-registered window.
+ *  Pure so the swap-time logic is unit-testable without a pi runtime. */
+export function windowChange(
+  registeredCtx: number | undefined,
+  probed: number | undefined,
+): { from: number | undefined; to: number } | null {
+  if (!probed || probed === registeredCtx) return null;
+  return { from: registeredCtx, to: probed };
+}
+
 export interface ProbeDeps {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
