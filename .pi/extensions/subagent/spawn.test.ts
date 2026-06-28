@@ -94,13 +94,28 @@ describe("resolveLauncher / defaultConcurrency", () => {
   it("points at bin/little-coder.mjs", () => {
     expect(resolveLauncher().replace(/\\/g, "/")).toMatch(/\/bin\/little-coder\.mjs$/);
   });
-  it("defaults concurrency to 2", () => {
+  it("defaults concurrency to 1 (serial) and honors explicit values incl. 0 (issue #57)", () => {
     const prev = process.env.LITTLE_CODER_SUBCODER_CONCURRENCY;
-    delete process.env.LITTLE_CODER_SUBCODER_CONCURRENCY;
-    expect(defaultConcurrency()).toBe(2);
-    process.env.LITTLE_CODER_SUBCODER_CONCURRENCY = "3";
-    expect(defaultConcurrency()).toBe(3);
-    if (prev === undefined) delete process.env.LITTLE_CODER_SUBCODER_CONCURRENCY;
-    else process.env.LITTLE_CODER_SUBCODER_CONCURRENCY = prev;
+    const set = (v?: string) => {
+      if (v === undefined) delete process.env.LITTLE_CODER_SUBCODER_CONCURRENCY;
+      else process.env.LITTLE_CODER_SUBCODER_CONCURRENCY = v;
+    };
+
+    set(undefined);
+    expect(defaultConcurrency()).toBe(1); // unset → serial default
+    set("");
+    expect(defaultConcurrency()).toBe(1); // empty → serial default
+    set("3");
+    expect(defaultConcurrency()).toBe(3); // explicit opt-in to parallelism
+    set("0");
+    expect(defaultConcurrency()).toBe(1); // 0 means "serial", not "fall back to default"
+    set("-3");
+    expect(defaultConcurrency()).toBe(1); // negatives clamp to serial
+    set("not-a-number");
+    expect(defaultConcurrency()).toBe(1); // garbage → serial default
+    set("2.9");
+    expect(defaultConcurrency()).toBe(2); // floored
+
+    set(prev);
   });
 });

@@ -104,8 +104,21 @@ export function buildChildEnv(extra?: Record<string, string>): NodeJS.ProcessEnv
 }
 
 export function defaultConcurrency(): number {
-  const n = Number(process.env.LITTLE_CODER_SUBCODER_CONCURRENCY);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 2;
+  // Default to 1 (fully serial). On small local setups two concurrent
+  // sub-coders contend for the same single-GPU/CPU model server and run
+  // *slower* than one at a time (issue #57, reported independently by two
+  // users). Parallelism is opt-in via LITTLE_CODER_SUBCODER_CONCURRENCY.
+  //
+  // Any explicit value is clamped to a floor of 1: a user who sets `=0`
+  // (or a negative) means "don't parallelize" — serial — not "fall back to
+  // the default", which is what the old `n > 0` test silently did. Both the
+  // normal dispatch tool and plan-mode go through this single function, so
+  // the env var now governs plan-mode research fan-out too.
+  const raw = process.env.LITTLE_CODER_SUBCODER_CONCURRENCY;
+  if (raw === undefined || raw === "") return 1;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.floor(n));
 }
 
 /** The last assistant text block in a transcript — the child's report. */

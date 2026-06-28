@@ -2,6 +2,18 @@
 
 All notable changes to little-coder are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and little-coder's public interface (CLI, providers, tools, skills) follows semver starting at `v0.0.1` post-rename.
 
+## [v1.9.10] — 2026-06-28
+
+### Fixed
+- **Sub-coder concurrency now defaults to 1 (serial), and `=0` is honored instead of silently ignored** ([#57](https://github.com/itayinbarr/little-coder/issues/57) by [@whateverforever](https://github.com/whateverforever), with [@charly1r](https://github.com/charly1r)). On a small local setup two sub-coders contend for the same single model server and run *slower* than one at a time, so 2 was the wrong default — it's now 1, and parallelism is opt-in via `LITTLE_CODER_SUBCODER_CONCURRENCY=2+`. Separately, `defaultConcurrency()` gated on `n > 0`, so a user who set `LITTLE_CODER_SUBCODER_CONCURRENCY=0` to force serial execution silently fell back to the default (2) instead. Explicit values are now clamped to a floor of 1, so `0` and negatives mean "serial". Both the dispatch tool and Plan Mode's research fan-out go through this one function, so Plan Mode now respects the env var too (it could generate up to 4 exploration tasks but now executes them one at a time under the default).
+- **Write is refused for Windows reserved device names (`nul`, `con`, `com1`–`com9`, `lpt1`–`lpt9`, `aux`, `prn`)** ([#60](https://github.com/itayinbarr/little-coder/issues/60) by [@charly1r](https://github.com/charly1r)). A model treating `nul` like `/dev/null` and writing to it created a literal `nul` file on Windows — backed by a reserved DOS device name, it's notoriously hard to delete. `write-guard` now blocks any write whose basename (case-insensitive, extension ignored) is a reserved device name and tells the model to pick a real filename or not write at all. Enforced on every platform, since a literal `nul`/`con` file is a mistake everywhere and a landmine the moment a POSIX-authored repo is cloned on Windows.
+- **Launcher now finds the bundled pi under bun's flat global layout** ([#56](https://github.com/itayinbarr/little-coder/issues/56) by [@kode54](https://github.com/kode54)). `bun add -g` hoists dependencies flat as siblings of the package (`…/@earendil-works/pi-coding-agent`) rather than nesting them under `little-coder/node_modules/`, so the launcher's hardcoded nested path failed and `little-coder` wouldn't start. It now tries the npm-nested path first, then the bun/flat sibling path, and the error message lists every location it checked.
+
+### Added
+- **`ctrl-h` toggles an on-screen keyboard-shortcuts panel** ([#55](https://github.com/itayinbarr/little-coder/issues/55) by [@cndjonno](https://github.com/cndjonno)). New hotkeys keep getting added (Plan Mode's `ctrl-q`, the thinking-level cycle, …) and weren't discoverable; `ctrl-h` now shows a compact, width-safe list of the keys worth knowing right below the input, and a `ctrl-h keys` hint joins the startup shortcut row. `ctrl-h` is genuinely unbound by both pi and the emacs-style editor (and not in pi's non-overridable set), so it registers with no conflict diagnostic. Because little-coder's custom shortcuts are registered with descriptions, both `ctrl-q` (plan) and `ctrl-h` (this panel) also appear automatically in pi's built-in `/hotkeys` reference.
+
+---
+
 ## [v1.9.9] — 2026-06-22
 
 ### Fixed

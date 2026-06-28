@@ -1,7 +1,34 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { harnessIntervention } from "../_shared/intervention.ts";
+
+// Windows reserved device names. Writing to a file whose basename is one of
+// these (with or without an extension, any case) targets a DOS device rather
+// than a real file on Windows, leaving an undeletable junk file behind — and
+// it's essentially always a mistake elsewhere too (the model treating `nul`
+// like `/dev/null`; issue #60). We block it on every platform so a POSIX run
+// can't author a file that's a landmine the moment the repo is cloned on
+// Windows.
+const RESERVED_DEVICE_NAMES = new Set([
+  "con",
+  "prn",
+  "aux",
+  "nul",
+  ...Array.from({ length: 9 }, (_, i) => `com${i + 1}`),
+  ...Array.from({ length: 9 }, (_, i) => `lpt${i + 1}`),
+]);
+
+/**
+ * True when `filePath`'s final segment is a Windows reserved device name.
+ * The check is case-insensitive and ignores any extension (`NUL.txt` and
+ * `com1.log` are reserved too — Windows resolves them to the device).
+ */
+export function isReservedDeviceName(filePath: string): boolean {
+  const base = basename(filePath).toLowerCase();
+  const stem = base.includes(".") ? base.slice(0, base.indexOf(".")) : base;
+  return RESERVED_DEVICE_NAMES.has(stem);
+}
 
 /**
  * Resolve a write `path` argument to a concrete on-disk path.
@@ -81,6 +108,27 @@ export default function (pi: ExtensionAPI) {
     // Normalize in place so the executing write (built-in or custom) lands on
     // the resolved path even when we don't block (e.g. the `/foo.md` → cwd fix).
     input[key] = resolved;
+
+    // Reserved Windows device name (nul, con, com1, …): refuse outright. On
+    // Windows this would create an undeletable device-named file (issue #60);
+    // everywhere it's a near-certain mistake. Block before the existsSync
+    // check — a reserved name should never be written regardless.
+    if (isReservedDeviceName(resolved)) {
+      harnessIntervention(
+        ctx,
+        `blocked a write to the reserved device name "${basename(resolved)}".`,
+      );
+      return {
+        block: true,
+        reason:
+          `Write refused — "${basename(resolved)}" is a reserved Windows device name ` +
+          `(CON, PRN, AUX, NUL, COM1-9, LPT1-9). Writing it creates an undeletable ` +
+          `junk file on Windows and is almost never intended.\n` +
+          `\n` +
+          `If you wanted to discard output, don't write a file at all. If you wanted a ` +
+          `real file, choose a normal name (e.g. "notes.txt", "output.log").`,
+      };
+    }
 
     if (!existsSync(resolved)) return; // new file — allow the write through
 

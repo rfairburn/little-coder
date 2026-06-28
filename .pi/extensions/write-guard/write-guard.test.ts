@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import setupWriteGuard, { normalizeWritePath } from "./index.ts";
+import setupWriteGuard, { normalizeWritePath, isReservedDeviceName } from "./index.ts";
 
 describe("normalizeWritePath", () => {
   const cwd = "/home/me/proj";
@@ -147,5 +147,49 @@ describe("write-guard tool_call interceptor", () => {
     const ctx = makeCtx(dir);
     const result = await handler({ toolName: "write", input: { content: "x" } }, ctx);
     expect(result).toBeUndefined();
+  });
+
+  it("blocks a write to a reserved Windows device name (issue #60)", async () => {
+    const handler = getToolCallHandler();
+    const ctx = makeCtx(dir);
+    // Bare `nul` — the model treating it like /dev/null. On Windows this would
+    // create an undeletable device-named file; we refuse on every platform.
+    const result = await handler({ toolName: "write", input: { path: "nul", content: "x" } }, ctx);
+    expect(result?.block).toBe(true);
+    expect(result.reason).toContain("reserved Windows device name");
+    expect(ctx.notifies[0]).toMatch(/reserved device name/i);
+  });
+
+  it("blocks reserved device names with an extension and any case", async () => {
+    const handler = getToolCallHandler();
+    const ctx = makeCtx(dir);
+    for (const name of ["NUL.txt", "Com1", "lpt9.log", "AUX", "con"]) {
+      const result = await handler({ toolName: "write", input: { path: name, content: "x" } }, ctx);
+      expect(result?.block, `${name} should be blocked`).toBe(true);
+    }
+  });
+
+  it("allows normal filenames that merely contain a reserved stem", async () => {
+    const handler = getToolCallHandler();
+    const ctx = makeCtx(dir);
+    // `nullable.ts` / `console.log` are NOT reserved — only the exact stem is.
+    for (const name of ["nullable.ts", "console.log", "auxiliary.md", "lpt.md"]) {
+      const result = await handler({ toolName: "write", input: { path: name, content: "x" } }, ctx);
+      expect(result, `${name} should pass`).toBeUndefined();
+    }
+  });
+});
+
+describe("isReservedDeviceName", () => {
+  it("matches reserved device names regardless of case or extension", () => {
+    for (const name of ["nul", "NUL", "Nul.txt", "con", "PRN", "aux", "com1", "COM9.log", "lpt1", "lpt9.dat"]) {
+      expect(isReservedDeviceName(name), name).toBe(true);
+      expect(isReservedDeviceName(`/home/me/proj/${name}`), name).toBe(true);
+    }
+  });
+  it("does not match normal names that merely start with a reserved stem", () => {
+    for (const name of ["nullable.ts", "console.log", "auxiliary", "com10", "lpt0", "comm", "null.d/real.txt"]) {
+      expect(isReservedDeviceName(name), name).toBe(false);
+    }
   });
 });

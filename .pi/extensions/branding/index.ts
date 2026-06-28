@@ -68,6 +68,7 @@ function buildHeader(theme: Theme, width: number): string[] {
     `${dim("!")} bash`,
     `${dim("ctrl-r")} more`,
     `${dim("ctrl-q")} plan`,
+    `${dim("ctrl-h")} keys`,
   ].join(sep);
   // pi-tui throws if any rendered line exceeds the terminal width (issue #48).
   // Truncate every line we hand it so a narrow terminal can't crash the launch.

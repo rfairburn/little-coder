@@ -59,25 +59,39 @@ const isSubagent = process.env.LITTLE_CODER_SUBAGENT === "1";
 //      Windows argv quoting itself.
 //   2. We no longer need a separate `cmd.exe /c …` branch, so the same
 //      spawn path works identically on Linux, macOS, and Windows.
-const piPkgRoot = join(pkgRoot, "node_modules", "@earendil-works", "pi-coding-agent");
+// pi can sit in one of two layouts depending on the installer:
+//   1. npm `-g` (and local `node_modules`) nests deps under the package:
+//      <pkgRoot>/node_modules/@earendil-works/pi-coding-agent
+//   2. bun `add -g` hoists deps flat as siblings of the package, so pi lands at
+//      <pkgRoot>/../@earendil-works/pi-coding-agent (issue #56).
+// Try the npm layout first (the common case), then the bun/flat sibling layout.
+const piPkgCandidates = [
+  join(pkgRoot, "node_modules", "@earendil-works", "pi-coding-agent"),
+  join(dirname(pkgRoot), "@earendil-works", "pi-coding-agent"),
+];
 let piEntry;
-try {
-  const piPkgJson = JSON.parse(readFileSync(join(piPkgRoot, "package.json"), "utf-8"));
-  const binRel = typeof piPkgJson?.bin === "string" ? piPkgJson.bin : piPkgJson?.bin?.pi;
-  if (typeof binRel !== "string") throw new Error("pi package.json has no bin.pi entry");
-  piEntry = resolve(piPkgRoot, binRel);
-} catch (err) {
-  console.error(
-    `little-coder: cannot resolve pi cli entry under ${piPkgRoot}.\n` +
-      `Underlying error: ${err?.message ?? err}\n` +
-      `Try reinstalling: npm install -g little-coder`,
-  );
-  process.exit(1);
+let piResolveErr;
+for (const piPkgRoot of piPkgCandidates) {
+  try {
+    const piPkgJson = JSON.parse(readFileSync(join(piPkgRoot, "package.json"), "utf-8"));
+    const binRel = typeof piPkgJson?.bin === "string" ? piPkgJson.bin : piPkgJson?.bin?.pi;
+    if (typeof binRel !== "string") throw new Error("pi package.json has no bin.pi entry");
+    const candidate = resolve(piPkgRoot, binRel);
+    if (existsSync(candidate)) {
+      piEntry = candidate;
+      break;
+    }
+    piResolveErr = new Error(`resolved bin ${candidate} does not exist`);
+  } catch (err) {
+    piResolveErr = err;
+  }
 }
-if (!existsSync(piEntry)) {
+if (!piEntry) {
   console.error(
-    `little-coder: cannot find pi at ${piEntry}.\n` +
-      `Try reinstalling: npm install -g little-coder`,
+    `little-coder: cannot resolve the bundled pi cli. Looked in:\n` +
+      piPkgCandidates.map((p) => `  - ${p}`).join("\n") +
+      `\nUnderlying error: ${piResolveErr?.message ?? piResolveErr}\n` +
+      `Try reinstalling: npm install -g little-coder  (or: bun add -g little-coder)`,
   );
   process.exit(1);
 }
